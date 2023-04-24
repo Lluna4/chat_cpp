@@ -1,0 +1,15 @@
+﻿  Chat.cpp
+C:\Users\carly\source\repos\Chat\Chat\Chat.cpp(12,10): warning C4101: 'message': variable local sin referencia
+C:\Users\carly\source\repos\Chat\Chat\Chat.cpp(14,20): warning C4101: 'client_size': variable local sin referencia
+C:\Users\carly\source\repos\Chat\Chat\Chat.cpp(14,9): warning C4101: 'recv_size': variable local sin referencia
+C:\Users\carly\source\repos\Chat\Chat\Chat.cpp(10,25): warning C4101: 'client_sock': variable local sin referencia
+Chat.obj : error LNK2019: símbolo externo __imp_accept sin resolver al que se hace referencia en la función main
+Chat.obj : error LNK2019: símbolo externo __imp_bind sin resolver al que se hace referencia en la función main
+Chat.obj : error LNK2019: símbolo externo __imp_closesocket sin resolver al que se hace referencia en la función main
+Chat.obj : error LNK2019: símbolo externo __imp_htons sin resolver al que se hace referencia en la función main
+Chat.obj : error LNK2019: símbolo externo __imp_listen sin resolver al que se hace referencia en la función main
+Chat.obj : error LNK2019: símbolo externo __imp_socket sin resolver al que se hace referencia en la función main
+Chat.obj : error LNK2019: símbolo externo __imp_WSAStartup sin resolver al que se hace referencia en la función main
+Chat.obj : error LNK2019: símbolo externo __imp_WSACleanup sin resolver al que se hace referencia en la función main
+Chat.obj : error LNK2019: símbolo externo __imp_WSAGetLastError sin resolver al que se hace referencia en la función main
+C:\Users\carly\source\repos\Chat\x64\Debug\Chat.exe : fatal error LNK1120: 9 externos sin resolver

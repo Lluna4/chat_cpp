@@ -1,0 +1,5 @@
+﻿  Chat.cpp
+C:\Users\carly\source\repos\Chat\Chat\Chat.cpp(20,17): error C2664: 'int send(SOCKET,const char *,int,int)': el argumento 2 no puede convertirse de 'std::string' a 'const char *'
+C:\Users\carly\source\repos\Chat\Chat\Chat.cpp(20,46): message : No hay disponible ningún operador de conversión definido por el usuario que pueda realizar esta conversión, o bien no se puede llamar al operador
+C:\Program Files (x86)\Windows Kits\10\Include\10.0.20348.0\um\WinSock2.h(2080,1): message : vea la declaración de 'send'
+C:\Users\carly\source\repos\Chat\Chat\Chat.cpp(20,17): message : al hacer coincidir la lista de argumentos '(SOCKET, std::string, size_t, int)'
