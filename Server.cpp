@@ -48,10 +48,29 @@ void cliente(SOCKET client_sock)
             index++;
         char *msg = (char *)calloc(index + 1, sizeof(char));
         memcpy(msg, buffer, index);
+        if (strcmp(buffer, "/exit") == 0) 
+        {
+            msg = (char *)std::format("{} se desconecto", username).c_str();
+            for(unsigned int i = 0; i < CLIENTS.size(); i++)
+            {   
+                send(CLIENTS[i], msg, strlen(msg), 0);
+            }
+            free(buffer);
+            break;
+        }
         msg = (char *)std::format("{}: {}", username, buffer).c_str();
         for(unsigned int i = 0; i < CLIENTS.size(); i++)
         {   
             send(CLIENTS[i], msg, strlen(msg), 0);
+        }
+    }
+    closesocket(client_sock);
+    for(unsigned int i = 0; i < CLIENTS.size(); i++)
+    {
+        if (CLIENTS[i] == client_sock)
+        {
+            CLIENTS.erase(CLIENTS.begin() + i);
+            break;
         }
     }
 }
