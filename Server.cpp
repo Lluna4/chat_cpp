@@ -8,21 +8,35 @@
 #include <Ws2tcpip.h>
 #include <format>
 
-const std::string SERVER_IP = "192.168.56.1";
-std::vector<SOCKET> CLIENTS;
+const std::string SERVER_IP = "0.0.0.0";
+std::vector<SOCKET> CLIENTS; //TODO: class clientes
+std::vector<char *> USERNAMES;
 
-int	ft_isalpha(int a)
+char	*ft_strjoin(char const *s1, char const *s2)
 
 {
-	if (a >= 65 && a <= 90)
+	char	*ret;
+	int		n;
+
+	n = -1;
+	if (*s1 == '\0' && *s2 == '\0')
+		return (_strdup(""));
+	ret = (char *)calloc(strlen(s1) + strlen(s2) + 1, sizeof(char));
+	if (!ret)
+		return (0);
+	while (*s1 != '\0')
 	{
-		return (1);
+		n++;
+		ret[n] = *s1;
+		s1++;
 	}
-	if (a >= 97 && a <= 122)
+	while (*s2 != '\0')
 	{
-		return (1);
+		n++;
+		ret[n] = *s2;
+		s2++;
 	}
-	return (0);
+	return (ret);
 }
 
 
@@ -40,10 +54,15 @@ void cliente(SOCKET client_sock)
 
     char *username = (char *)calloc(50, sizeof(char));
     recv(client_sock, username, 50, 0);
+    USERNAMES.push_back(username);
     while (1)
     {
         char *buffer = (char *)calloc(1024, sizeof(char));
-        recv(client_sock, buffer, 1024, 0);
+        int read = recv(client_sock, buffer, 1024, 0);
+        if (read == -1)
+        {
+            break;    
+        }  
         while (buffer[index])
             index++;
         char *msg = (char *)calloc(index + 1, sizeof(char));
@@ -58,11 +77,23 @@ void cliente(SOCKET client_sock)
             free(buffer);
             break;
         }
-        msg = (char *)std::format("{}: {}", username, buffer).c_str();
+        if (strcmp(buffer, "/users") == 0)
+        {
+            char *msg_user = USERNAMES[0];
+            for(unsigned int i = 1; i < USERNAMES.size(); i++)
+            {
+                msg_user = ft_strjoin(msg_user, ", ");
+                msg_user = ft_strjoin(msg_user, USERNAMES[i]);
+            }
+            send(client_sock, msg_user, strlen(msg_user), 0);
+            continue;
+        }
+        msg = (char *)std::format("{}: {}\n", username, buffer).c_str();
         for(unsigned int i = 0; i < CLIENTS.size(); i++)
         {   
             send(CLIENTS[i], msg, strlen(msg), 0);
         }
+        free(buffer);
     }
     closesocket(client_sock);
     for(unsigned int i = 0; i < CLIENTS.size(); i++)
@@ -72,6 +103,14 @@ void cliente(SOCKET client_sock)
             CLIENTS.erase(CLIENTS.begin() + i);
             break;
         }
+    }
+    for(unsigned int i = 0; i < USERNAMES.size(); i++)
+    {
+        if (USERNAMES[i] == username)
+            {
+                USERNAMES.erase(USERNAMES.begin() + i);
+                break;
+            }
     }
 }
 
@@ -101,7 +140,7 @@ int main()
         WSACleanup();
         return 1;
     }
-    printf("Escuchando conexiones en 192.168.56.1:5050");
+    printf("Escuchando conexiones en localhost:5050");
     while (true)
     {
         listen(listen_sock, SOMAXCONN);
