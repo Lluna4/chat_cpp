@@ -7,7 +7,7 @@
 #include "Walnut/Image.h"
 
 char* BUFFER = (char*)calloc(1024, sizeof(char));
-char* USERNAME = (char*)calloc(50, sizeof(char));
+std::string USERNAME;
 std::vector<char*> MESSAGES;
 SOCKET client_socket;
 const std::string SERVER_IP = "127.0.0.1";
@@ -90,7 +90,7 @@ public:
 	virtual void OnUIRender() override
 	{
 		
-		ImGui::Begin("Test");
+		ImGui::Begin("Chat");
 
 		if (MESSAGES.size() != 0)
 			for (unsigned int i = 0; i < MESSAGES.size(); i++)
@@ -108,11 +108,30 @@ public:
 	{
 
 		ImGui::Begin("Chat");
+		if (FIRST == true)
+		{
+			ImGui::OpenPopup("username");
+		}
+		if (ImGui::BeginPopupModal("username")) 
+		{
+			ImGui::Text("Cual es tu nombre de usuario?");
+			int textInputFlags = ImGuiInputTextFlags_EnterReturnsTrue;
+			if (ImGui::InputText(" ", BUFFER, 1024, textInputFlags))
+			{
+				USERNAME = _strdup(BUFFER);
+				memset(BUFFER, 0, sizeof(BUFFER));
+				FIRST = false;
+				send(client_socket, USERNAME.c_str(), USERNAME.size(), 0);
+				ImGui::CloseCurrentPopup();
+			}
+			ImGui::EndPopup();
+		}
 		int textInputFlags = ImGuiInputTextFlags_EnterReturnsTrue;
 		auto windowWidth = ImGui::GetWindowSize().x;
 
 		ImGui::SetCursorPosX(windowWidth * 0.15f);
-		if (ImGui::InputText(" ", BUFFER, 1024, textInputFlags)) {
+		if (ImGui::InputText(" ", BUFFER, 1024, textInputFlags) && FIRST == false) 
+		{
 			// enter was pressed 
 			if (strcmp(BUFFER, "/saveuser") == 0 && std::filesystem::exists("sav") == false)
 			{
@@ -138,9 +157,6 @@ public:
 			}
 			// now clear it
 			memset(BUFFER, 0, sizeof(BUFFER));
-
-			// and focus back back on that InputText widget
-			ImGui::SetKeyboardFocusHere(-1);
 		}
 		ImGui::End();
 	}
@@ -168,12 +184,42 @@ Walnut::Application* Walnut::CreateApplication(int argc, char** argv)
 
     std::thread receive_thread(receive, client_socket);
     receive_thread.detach();
+
+	if (std::filesystem::exists("sav") == true)
+	{
+		std::ifstream save("sav");
+		std::getline(save, USERNAME);
+		send(client_socket, USERNAME.c_str(), USERNAME.size(), 0);
+		FIRST = false;
+	}
 	Walnut::ApplicationSpecification spec;
 	spec.Name = "Test chat";
-	MESSAGES.push_back(_strdup("Cual es tu nombre de usuario?"));
 
 	Walnut::Application* app = new Walnut::Application(spec);
 	app->PushLayer<ExampleLayer>();
 	app->PushLayer<ChatLayer>();
+	app->SetMenubarCallback([app]()
+		{
+			if (ImGui::BeginMenu("Guardar"))
+			{
+				if (ImGui::MenuItem("Guardar usuario"))
+				{
+					std::ofstream save("sav");
+					save << USERNAME;
+					save.close();
+					MESSAGES.push_back(_strdup("Se ha guardado el nombre de usuario"));
+				}
+				if (ImGui::MenuItem("Eliminar usuario"))
+				{
+					if (std::filesystem::exists("sav") == true)
+					{
+						remove("sav");
+						MESSAGES.push_back(_strdup("Se ha borrado el nombre de usuario guardado"));
+					}
+				}
+				ImGui::EndMenu();
+			}
+		}
+	);
 	return app;
 }
