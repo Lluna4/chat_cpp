@@ -5,140 +5,167 @@
 #include <WinSock2.h>
 #include <vector>
 #include <thread>
+#include <ctime>
+#include <chrono>
 #include <Ws2tcpip.h>
 #include <format>
+#include <fstream>
+#include <filesystem>
+#include "encoding.hpp"
 
 const std::string SERVER_IP = "0.0.0.0";
-
+const char* key = generate_key();
+int PORT = 5050;
+bool UNSENT_MESSAGES = false;
 
 class Cliente
 {
-    public:
-        Cliente () {}
+public:
+    Cliente() {}
 
-        Cliente(SOCKET socket, char *username)
-            :socket_(socket), username_(username)
-        {}
+    Cliente(SOCKET socket, char* username)
+        :socket_(socket), username_(username)
+    {}
 
-        SOCKET get_socket()
-        {
-            return socket_;
-        }
+    SOCKET get_socket()
+    {
+        return socket_;
+    }
 
-        char *get_username()
-        {
-            return username_;
-        }
-    private:
-        SOCKET socket_;
-        char *username_;
+    char* get_username()
+    {
+        return username_;
+    }
+private:
+    SOCKET socket_;
+    char* username_;
 };
 
-std::vector<Cliente> CLIENTS;
-std::vector<char *> MESSAGES;
-
-char	*ft_strjoin(char const *s1, char const *s2)
-
+class Message
 {
-	char	*ret;
-	int		n;
+public:
+    Message() {}
 
-	n = -1;
-	if (*s1 == '\0' && *s2 == '\0')
-		return (_strdup(""));
-	ret = (char *)calloc(strlen(s1) + strlen(s2) + 1, sizeof(char));
-	if (!ret)
-		return (0);
-	while (*s1 != '\0')
-	{
-		n++;
-		ret[n] = *s1;
-		s1++;
-	}
-	while (*s2 != '\0')
-	{
-		n++;
-		ret[n] = *s2;
-		s2++;
-	}
-	return (ret);
+    Message(char* username, std::string message, bool sent)
+        :username_(username), message_(message), sent_(sent)
+    {}
+
+    char* get_username()
+    {
+        return username_;
+    }
+
+    void set_username(char* new_username)
+    {
+        username_ = _strdup(new_username);
+    }
+
+    std::string get_message()
+    {
+        return message_;
+    }
+
+    bool get_sent()
+    {
+        return sent_;
+    }
+
+    void sent()
+    {
+        sent_ = true;
+    }
+
+private:
+    char* username_;
+    std::string message_;
+    bool sent_;
+};
+
+
+std::vector<Cliente> CLIENTS;
+std::vector<Message> MESSAGES;
+
+void file_sv()
+{
+    SOCKET listen_sock, client_sock;
+    struct sockaddr_in server;
+    int recv_size, client_size;
+    listen_sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (listen_sock == INVALID_SOCKET) {
+        printf("socket failed: %d\n", WSAGetLastError());
+        WSACleanup();
+        return ;
+    }
+    server.sin_family = AF_INET;
+    server.sin_addr.s_addr = inet_addr(SERVER_IP.c_str());
+    server.sin_port = htons(5051);
+    if (bind(listen_sock, (struct sockaddr*)&server, sizeof(server)) == SOCKET_ERROR) {
+        printf("bind failed: %d\n", WSAGetLastError());
+        closesocket(listen_sock);
+        WSACleanup();
+        return ;
+    }
+    printf("Servidor de archivos en localhost:5051\n");
+    while (true)
+    {
+        listen(listen_sock, SOMAXCONN);
+        client_size = sizeof(struct sockaddr_in);
+        client_sock = accept(listen_sock, (struct sockaddr*)&server, &client_size);
+    }
 }
 
-
-void cliente(SOCKET client_sock)
+void chat(SOCKET cliente)
 {
-    int index = 0;
-    sockaddr_in client_addr;
-    int client_addr_len = sizeof(client_addr);
-    getpeername(client_sock, (sockaddr*)&client_addr, &client_addr_len);
-
-    char client_ip[50];
-    inet_ntop(AF_INET, &client_addr.sin_addr, client_ip, 50);
-
-    std::cout << "Cliente conectado en " << client_ip << ":" << ntohs(client_addr.sin_port) << std::endl;
-
-    char *username = (char *)calloc(50, sizeof(char));
-    recv(client_sock, username, 50, 0);
-    CLIENTS.push_back(Cliente(client_sock, username));
-    char *msg = (char *)std::format("{} se conecto", username).c_str();
-    for(unsigned int i = 0; i < CLIENTS.size(); i++)
-    {   
-        send(CLIENTS[i].get_socket(), msg, strlen(msg), 0);
-    }
-    if (MESSAGES.size() > 0)
+    send(cliente, key, strlen(key), 0);
+    char* username = (char*)calloc(50, sizeof(char));
+    if (!username)
     {
-        for(unsigned int i = 0; i < MESSAGES.size(); i++)
+        return;
+    }
+    recv(cliente, username, 50, 0);
+    username = _strdup(decode_text(username, key));
+    CLIENTS.push_back(Cliente(cliente, username));
+    char* mssg = (char*)std::format("{} se conectó", username).c_str();
+    {
+        for (unsigned int i = 0; i < CLIENTS.size(); i++)
         {
-            std::cout << MESSAGES[i]<< std::endl;
-            send(client_sock, MESSAGES[i], strlen(MESSAGES[i]), 0);
+            send(CLIENTS[i].get_socket(), encode_text(mssg, key), strlen(mssg), 0);
         }
     }
+    char* buffer = (char*)calloc(1024, sizeof(1024));
+    std::string msg;
+    int bytes_read = 0;
     while (1)
     {
-        char *buffer = (char *)calloc(1024, sizeof(char));
-        int read = recv(client_sock, buffer, 1024, 0);
-        if (read == -1)
+        bytes_read = recv(cliente, buffer, 1024, 0);
+        if (bytes_read == -1)
         {
-            break;    
-        }  
-        while (buffer[index])
-            index++;
-        char *msg = (char *)calloc(index + 1, sizeof(char));
-        memcpy(msg, buffer, index);
-        if (strcmp(buffer, "/exit") == 0) 
-        {
-            free(buffer);
             break;
         }
-        if (strcmp(buffer, "/users") == 0)
+        if (username && buffer)
         {
-            char *msg_user = CLIENTS[0].get_username();
-            for(unsigned int i = 1; i < CLIENTS.size(); i++)
+            msg = std::format("{}: {}", username, decode_text(buffer, key));
+            for (unsigned int i = 0; i < CLIENTS.size(); i++)
             {
-                msg_user = ft_strjoin(msg_user, ", ");
-                msg_user = ft_strjoin(msg_user, CLIENTS[i].get_username());
+                send(CLIENTS[i].get_socket(), encode_text((char*)msg.c_str(), key), msg.size(), 0);
             }
-            send(client_sock, msg_user, strlen(msg_user), 0);
-            continue;
         }
-        msg = (char *)std::format("{}: {}\n", username, buffer).c_str();
-        for(unsigned int i = 0; i < CLIENTS.size(); i++)
-        {   
-            send(CLIENTS[i].get_socket(), msg, strlen(msg), 0);
-        }
-        std::cout << msg << std::endl;
-        MESSAGES.push_back(_strdup(msg));
-        free(buffer);
+        msg.clear();
+        memset(buffer, 0, 1024);
     }
-    closesocket(client_sock);
-    msg = (char *)std::format("{} se desconecto", username).c_str();
-    for(unsigned int i = 0; i < CLIENTS.size(); i++)
-    {   
-        send(CLIENTS[i].get_socket(), msg, strlen(msg), 0);
-    }
-    for(unsigned int i = 0; i < CLIENTS.size(); i++)
+
+    closesocket(cliente);
+    mssg = (char*)std::format("{} se desconectó", username).c_str();
     {
-        if (CLIENTS[i].get_socket() == client_sock)
+        for (unsigned int i = 0; i < CLIENTS.size(); i++)
+        {
+            send(CLIENTS[i].get_socket(), encode_text(mssg, key), strlen(mssg), 0);
+        }
+    }
+
+    for (unsigned int i = 0; i < CLIENTS.size(); i++)
+    {
+        if (CLIENTS[i].get_socket() == cliente)
         {
             CLIENTS.erase(CLIENTS.begin() + i);
             break;
@@ -146,17 +173,19 @@ void cliente(SOCKET client_sock)
     }
 }
 
+
 int main()
 {
     WSADATA wsa;
     SOCKET listen_sock, client_sock;
     struct sockaddr_in server;
     int recv_size, client_size;
-
-    if (WSAStartup(MAKEWORD(2,2), &wsa) != 0) {
+    if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) {
         printf("WSAStartup failed: %d\n", WSAGetLastError());
         return 1;
     }
+    std::thread file_th(file_sv);
+    file_th.detach();
     listen_sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (listen_sock == INVALID_SOCKET) {
         printf("socket failed: %d\n", WSAGetLastError());
@@ -166,24 +195,24 @@ int main()
     server.sin_family = AF_INET;
     server.sin_addr.s_addr = inet_addr(SERVER_IP.c_str());
     server.sin_port = htons(5050);
-    if (bind(listen_sock, (struct sockaddr *)&server, sizeof(server)) == SOCKET_ERROR) {
+    if (bind(listen_sock, (struct sockaddr*)&server, sizeof(server)) == SOCKET_ERROR) {
         printf("bind failed: %d\n", WSAGetLastError());
         closesocket(listen_sock);
         WSACleanup();
         return 1;
     }
-    printf("Escuchando conexiones en localhost:5050\n");
+    printf("El servidor de chat en localhost:5050\n");
     while (true)
     {
         listen(listen_sock, SOMAXCONN);
         client_size = sizeof(struct sockaddr_in);
-        client_sock = accept(listen_sock, (struct sockaddr *)&server, &client_size);
-        std::thread cliente_th(cliente, client_sock);
+        client_sock = accept(listen_sock, (struct sockaddr*)&server, &client_size);
+        std::thread cliente_th(chat, client_sock);
         cliente_th.detach();
+
     }
 
     WSACleanup();
     return 0;
 }
-
 
