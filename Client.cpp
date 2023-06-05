@@ -14,25 +14,39 @@
 
 char* BUFFER = (char*)calloc(1024, sizeof(char));
 std::string USERNAME;
-
 std::vector<ImVec4> COLORS = {
-	ImVec4(0.16f, 0.99f, 0.01f, 1.0f),  // Green
-	ImVec4(1.0f, 0.0f, 0.0f, 1.0f),     // Red
-	ImVec4(0.0f, 0.0f, 1.0f, 1.0f),     // Blue
-	ImVec4(1.0f, 1.0f, 0.0f, 1.0f),     // Yellow
-	ImVec4(1.0f, 0.0f, 1.0f, 1.0f),     // Magenta
-	ImVec4(0.0f, 1.0f, 1.0f, 1.0f),     // Cyan
-	ImVec4(0.5f, 0.2f, 0.8f, 1.0f),     // Lavender
-	ImVec4(1.0f, 0.5f, 0.0f, 1.0f),     // Orange
-	ImVec4(0.0f, 1.0f, 0.0f, 1.0f),     // Lime
-	ImVec4(0.5f, 0.0f, 0.5f, 1.0f),     // Purple
-	ImVec4(0.0f, 0.5f, 0.5f, 1.0f),     // Teal
-	ImVec4(0.0f, 0.5f, 1.0f, 1.0f),     // Sky Blue
-	ImVec4(0.5f, 0.0f, 0.0f, 1.0f),     // Maroon
-	ImVec4(0.0f, 0.0f, 0.5f, 1.0f),     // Navy
-	ImVec4(0.5f, 0.5f, 0.0f, 1.0f),     // Olive
-	ImVec4(0.5f, 0.0f, 0.5f, 1.0f)      // Indigo
+	ImVec4(0.584f, 0.827f, 0.898f, 1.0f),   // Pastel Blue
+	ImVec4(0.925f, 0.635f, 0.694f, 1.0f),   // Pastel Pink
+	ImVec4(0.851f, 0.737f, 0.631f, 1.0f),   // Pastel Peach
+	ImVec4(0.851f, 0.576f, 0.576f, 1.0f),   // Pastel Salmon
+	ImVec4(0.686f, 0.847f, 0.686f, 1.0f),   // Pastel Green
+	ImVec4(0.776f, 0.702f, 0.902f, 1.0f),   // Pastel Lavender
+	ImVec4(0.902f, 0.635f, 0.776f, 1.0f),   // Pastel Rose
+	ImVec4(0.635f, 0.882f, 0.898f, 1.0f),   // Pastel Aqua
+	ImVec4(0.847f, 0.827f, 0.702f, 1.0f),   // Pastel Beige
+	ImVec4(0.902f, 0.847f, 0.576f, 1.0f),   // Pastel Yellow
+	ImVec4(0.827f, 0.686f, 0.898f, 1.0f),   // Pastel Lilac
+	ImVec4(0.776f, 0.882f, 0.702f, 1.0f),   // Pastel Lime
+	ImVec4(0.776f, 0.702f, 0.902f, 1.0f),   // Pastel Orchid
+	ImVec4(0.847f, 0.827f, 0.631f, 1.0f),   // Pastel Khaki
+	ImVec4(0.898f, 0.631f, 0.631f, 1.0f),   // Pastel Coral
+	ImVec4(0.584f, 0.827f, 0.827f, 1.0f),   // Pastel Turquoise
+	ImVec4(0.925f, 0.663f, 0.545f, 1.0f),   // Pastel Apricot
+	ImVec4(0.631f, 0.902f, 0.682f, 1.0f),   // Pastel Mint
+	ImVec4(0.686f, 0.631f, 0.898f, 1.0f),   // Pastel Grape
+	ImVec4(0.898f, 0.631f, 0.925f, 1.0f),   // Pastel Toffee
+	ImVec4(0.702f, 0.737f, 0.902f, 1.0f),   // Pastel Steel Blue
+	ImVec4(0.902f, 0.686f, 0.902f, 1.0f),   // Pastel Orchid Pink
+	ImVec4(0.737f, 0.847f, 0.902f, 1.0f),   // Pastel Sky Blue
+	ImVec4(0.898f, 0.702f, 0.702f, 1.0f),   // Pastel Salmon Pink
+	ImVec4(0.686f, 0.737f, 0.847f, 1.0f),   // Pastel Blue Gray
+	ImVec4(0.827f, 0.631f, 0.898f, 1.0f),   // Pastel Orchid Purple
+	ImVec4(0.631f, 0.827f, 0.827f, 1.0f),   // Pastel Pistachio
+	ImVec4(0.702f, 0.631f, 0.898f, 1.0f),   // Pastel Purple
+	ImVec4(0.898f, 0.686f, 0.631f, 1.0f),   // Pastel Caramel
+	ImVec4(0.831f, 0.749f, 0.592f, 1.0f)    // Pastel Brown
 };
+
 SOCKET client_socket;
 const std::string SERVER_IP = "127.0.0.1";
 const int SERVER_PORT = 5050;
@@ -132,8 +146,8 @@ class Message
 	public:
 		Message() {}
 
-		Message(char *msg, User usuario)
-			:msg_(msg), usuario_(usuario)
+		Message(char *msg, User usuario, bool same)
+			:msg_(msg), usuario_(usuario), same_(same)
 		{}
 
 		char* get_message()
@@ -151,9 +165,15 @@ class Message
 			return usuario_.get_color();
 		}
 
+		bool get_same()
+		{
+			return same_;
+		}
+
 	private:
 		char* msg_;
 		User usuario_;
+		bool same_;
 
 };
 std::vector<Message> MESSAGES;
@@ -195,7 +215,10 @@ void receive(SOCKET client)
 					{
 						if (strcmp(USERS[i].get_username(), get_username(msg)) == 0)
 						{
-							MESSAGES.push_back(Message(_strdup(msg), USERS[i]));
+							if (strcmp(MESSAGES.back().get_username(), get_username(msg)) == 0)
+								MESSAGES.push_back(Message(_strdup(msg), USERS[i], true));
+							else
+								MESSAGES.push_back(Message(_strdup(msg), USERS[i], false));
 							found = true;
 							break;
 						}
@@ -203,20 +226,23 @@ void receive(SOCKET client)
 					if (found == false)
 					{
 						User usr = User(get_username(msg));
-						MESSAGES.push_back(Message(_strdup(msg), usr));
+						if (strcmp(MESSAGES.back().get_username(), get_username(msg)) == 0)
+							MESSAGES.push_back(Message(_strdup(msg), usr, true));
+						else
+							MESSAGES.push_back(Message(_strdup(msg), usr, false));		
 						USERS.push_back(usr);
 					}
 				}
 				else
 				{
 					User usr = User(get_username(msg));
-					MESSAGES.push_back(Message(_strdup(msg), usr));
+					MESSAGES.push_back(Message(_strdup(msg), usr, false));
 					USERS.push_back(usr);
 				}
 				
 				continue ;
 			}
-			MESSAGES.push_back(Message(_strdup(msg), User()));
+			MESSAGES.push_back(Message(_strdup(msg), User(), false));
 		}
 		free(msg);
 		free(time);
@@ -239,12 +265,15 @@ public:
 				{
 					if (i > 0)
 					{
-						ImGui::Text(" ");
-						ImGui::TextColored(MESSAGES[i].get_color(), MESSAGES[i].get_username());
-						ImGui::SameLine();
-						ImGui::SetWindowFontScale(0.8f);
-						ImGui::TextColored(ImVec4(0.38f, 0.4f, 0.42f, 0.9f), _strdup(get_time()));
-						ImGui::SetWindowFontScale(1.0f);
+						if (MESSAGES[i].get_same() == false)
+						{
+							ImGui::Text(" ");
+							ImGui::TextColored(MESSAGES[i].get_color(), MESSAGES[i].get_username());
+							ImGui::SameLine();
+							ImGui::SetWindowFontScale(0.8f);
+							ImGui::TextColored(ImVec4(0.38f, 0.4f, 0.42f, 0.9f), _strdup(get_time()));
+							ImGui::SetWindowFontScale(1.0f);
+						}
 					}
 					ImGui::Text(strstr(MESSAGES[i].get_message(), " "));
 				}
@@ -253,6 +282,10 @@ public:
 					if (strstr(MESSAGES[i].get_message(), "se conect"))
 					{
 						ImGui::TextColored(ImVec4(0.16f, 0.99f, 0.01f, 1.0f), MESSAGES[i].get_message());
+					}
+					else if (strstr(MESSAGES[i].get_message(), "se desconect"))
+					{
+						ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), MESSAGES[i].get_message());
 					}
 					else
 					{
@@ -304,7 +337,7 @@ public:
 			// enter was pressed 
 			if (strcmp(BUFFER, "/fps") == 0)
 			{
-				MESSAGES.push_back(Message(_strdup(ft_itoa((int)ImGui::GetIO().Framerate)), User()));
+				MESSAGES.push_back(Message(_strdup(ft_itoa((int)ImGui::GetIO().Framerate)), User(), false));
 			}
 			else
 			{
@@ -365,7 +398,7 @@ Walnut::Application* Walnut::CreateApplication(int argc, char** argv)
 		FIRST = false;
 	}
 	Walnut::ApplicationSpecification spec;
-	spec.Name = "Test chat";
+	spec.Name = "Lunachat";
 
 	Walnut::Application* app = new Walnut::Application(spec);
 	app->PushLayer<ExampleLayer>();
@@ -379,14 +412,14 @@ Walnut::Application* Walnut::CreateApplication(int argc, char** argv)
 					std::ofstream save("sav");
 					save << USERNAME;
 					save.close();
-					MESSAGES.push_back(Message(_strdup("Se ha guardado el nombre de usuario"), User()));
+					MESSAGES.push_back(Message(_strdup("Se ha guardado el nombre de usuario"), User(), false));
 				}
 				if (ImGui::MenuItem("Eliminar usuario"))
 				{
 					if (std::filesystem::exists("sav") == true)
 					{
 						remove("sav");
-						MESSAGES.push_back(Message(_strdup("Se ha borrado el nombre de usuario guardado"), User()));
+						MESSAGES.push_back(Message(_strdup("Se ha borrado el nombre de usuario guardado"), User(), false));
 					}
 				}
 				ImGui::EndMenu();
