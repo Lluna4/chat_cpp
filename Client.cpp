@@ -14,6 +14,7 @@
 
 char* BUFFER = (char*)calloc(1024, sizeof(char));
 std::string USERNAME;
+bool showColorPickerPopup = false;
 std::vector<ImVec4> COLORS = {
 	ImVec4(0.584f, 0.827f, 0.898f, 1.0f),   // Pastel Blue
 	ImVec4(0.925f, 0.635f, 0.694f, 1.0f),   // Pastel Pink
@@ -136,11 +137,16 @@ class User
 			return color;
 		}
 
+		void set_color(ImVec4 newcolor)
+		{
+			color = newcolor;
+		}
+
 	private:
 		char* username_;
 		ImVec4 color = getRandomElement(COLORS); 
 };
-
+std::vector<User> USERS;
 class Message
 {
 	public:
@@ -170,6 +176,17 @@ class Message
 			return same_;
 		}
 
+		void update_user()
+		{
+			for (unsigned int i = 0; i < USERS.size(); i++)
+			{
+				if (strcmp(USERS[i].get_username(), usuario_.get_username()) == 0)
+				{
+					usuario_ = USERS[i];
+				}
+			}
+		}
+
 	private:
 		char* msg_;
 		User usuario_;
@@ -177,7 +194,7 @@ class Message
 
 };
 std::vector<Message> MESSAGES;
-std::vector<User> USERS;
+
 
 char* get_username(char* msg)
 {
@@ -201,7 +218,6 @@ void receive(SOCKET client)
 			continue;
 		}
 		char* msg = (char*)calloc(1024, sizeof(char));
-		char* time = (char*)calloc(6, sizeof(char));
 		recv(client, msg, 1024, 0);
 		if (msg[0] != ' ' && msg[0] != NULL)
 		{
@@ -245,7 +261,6 @@ void receive(SOCKET client)
 			MESSAGES.push_back(Message(_strdup(msg), User(), false));
 		}
 		free(msg);
-		free(time);
 	}
 }
 
@@ -267,6 +282,7 @@ public:
 					{
 						if (MESSAGES[i].get_same() == false)
 						{
+							MESSAGES[i].update_user();
 							ImGui::Text(" ");
 							ImGui::TextColored(MESSAGES[i].get_color(), MESSAGES[i].get_username());
 							ImGui::SameLine();
@@ -275,7 +291,7 @@ public:
 							ImGui::SetWindowFontScale(1.0f);
 						}
 					}
-					ImGui::Text(strstr(MESSAGES[i].get_message(), " "));
+					ImGui::TextWrapped(strstr(MESSAGES[i].get_message(), " "));
 				}
 				else
 				{
@@ -297,6 +313,7 @@ public:
 
 			}
 		}
+		ImGui::SetScrollHereY(1.0f);
 		ImGui::End();
 	}
 	/*private:
@@ -348,25 +365,10 @@ public:
 
 			ImGui::SetKeyboardFocusHere(-1);
 		}
-		ImGui::SameLine();
-		if (ImGui::Button("test"))
-		{
-			std::string file_path = open_dialog();
-			FILE* fd = fopen(file_path.c_str(), "rb");
-			size_t rret, wret;
-			int bytes_read;
-			char buffer[1024];
-			send(client_socket, encode_text((char *)"/image", KEY), 6, 0);
-			while (!feof(fd)) {
-				if ((bytes_read = fread(&buffer, 1, 1024, fd)) > 0)
-					send(client_socket, buffer, bytes_read, 0);
-				else
-					break;
-			}
-		}
 		ImGui::End();
 	}
 };
+
 
 Walnut::Application* Walnut::CreateApplication(int argc, char** argv)
 {
@@ -423,6 +425,36 @@ Walnut::Application* Walnut::CreateApplication(int argc, char** argv)
 					}
 				}
 				ImGui::EndMenu();
+			}
+			if (ImGui::BeginMenu("Color"))
+			{
+				if (ImGui::MenuItem("Cambiar color"))
+				{
+					showColorPickerPopup = true;
+				}
+				ImGui::EndMenu();
+			}
+			if (showColorPickerPopup) {
+				ImGui::OpenPopup("Color Picker Popup");
+				showColorPickerPopup = false; // Reset the flag
+			}
+
+			// Begin the color picker popup
+			if (ImGui::BeginPopup("Color Picker Popup")) {
+				static ImVec4 color = ImVec4(1.0f, 0.0f, 0.0f, 1.0f); // Initial color
+				ImGui::ColorPicker4("Color", (float*)&color, ImGuiColorEditFlags_None);
+				if (ImGui::Button("Select")) {
+					// Perform any necessary actions with the selected color
+					for (unsigned int i = 0; i < USERS.size(); i++)
+					{
+						if (strcmp(USERS[i].get_username(), USERNAME.c_str()) == 0)
+						{
+							USERS[i].set_color(color);
+						}
+					}
+					ImGui::CloseCurrentPopup();
+				}
+				ImGui::EndPopup();
 			}
 		}
 	);
