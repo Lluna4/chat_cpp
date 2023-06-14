@@ -1,4 +1,5 @@
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
+#define _CRT_SECURE_NO_WARNINGS
 #include <iostream>
 #include <string.h>
 #include <sys/types.h>
@@ -46,7 +47,7 @@ class Message
 public:
     Message() {}
 
-    Message(char* username, std::string message, bool sent)
+    Message(char* username, char *message, bool sent)
         :username_(username), message_(message), sent_(sent)
     {}
 
@@ -60,7 +61,7 @@ public:
         username_ = _strdup(new_username);
     }
 
-    std::string get_message()
+    char *get_message()
     {
         return message_;
     }
@@ -75,9 +76,14 @@ public:
         sent_ = true;
     }
 
+    int get_size()
+    {
+        return strlen(username_) + strlen(message_);
+    }
+
 private:
     char* username_;
-    std::string message_;
+    char *message_;
     bool sent_;
 };
 
@@ -85,7 +91,37 @@ private:
 std::vector<Cliente> CLIENTS;
 std::vector<Message> MESSAGES;
 
-void file_sv()
+void push_to_db()
+{
+    std::ofstream db("./resources/db");
+    for (unsigned int i = 0; i < MESSAGES.size(); i++)
+    {
+        db << std::format("{} {}\n", MESSAGES[i].get_username(), MESSAGES[i].get_message());       
+    }
+    std::cout << "Guardado!" << std::endl;
+    db.close();
+}
+
+void db()
+{
+    int prev_size = 0;
+    if (std::filesystem::exists("./resources") == false)
+    {
+        std::filesystem::create_directories("./resources");
+        std::cout << "Creada carpeta resources" << std::endl;
+    }
+    while (1)
+    {
+        std::this_thread::sleep_for(std::chrono::seconds(10));
+        if ((int)MESSAGES.size() > prev_size)
+        {
+            prev_size = (int)MESSAGES.size();
+            push_to_db();
+        }
+    }
+}
+
+void file_sv_listen()
 {
     SOCKET listen_sock, client_sock;
     struct sockaddr_in server;
@@ -125,16 +161,21 @@ void chat(SOCKET cliente)
     recv(cliente, username, 50, 0);
     username = _strdup(decode_text(username, key));
     CLIENTS.push_back(Cliente(cliente, username));
-    char* mssg = (char*)std::format("{} se conectó", username).c_str();
+    char* mssg = (char*)std::format("{} se conecto", username).c_str();
+    for (unsigned int i = 0; i < CLIENTS.size(); i++)
     {
-        for (unsigned int i = 0; i < CLIENTS.size(); i++)
-        {
-            send(CLIENTS[i].get_socket(), encode_text(mssg, key), strlen(mssg), 0);
-        }
+        send(CLIENTS[i].get_socket(), encode_text(mssg, key), strlen(mssg), 0);
     }
     char* buffer = (char*)calloc(1024, sizeof(1024));
     std::string msg;
     int bytes_read = 0;
+    std::cout << MESSAGES.size() << std::endl;
+    for (unsigned int i = 0; i < MESSAGES.size(); i++)
+    {
+        msg = std::format("{}: {}", MESSAGES[i].get_username(), MESSAGES[i].get_message());
+        std::cout << msg << std::endl;
+        send(cliente, encode_text((char*)msg.c_str(), key), msg.size(), 0);
+    }
     while (1)
     {
         bytes_read = recv(cliente, buffer, 1024, 0);
@@ -144,6 +185,7 @@ void chat(SOCKET cliente)
         }
         if (username && buffer)
         {
+            MESSAGES.push_back(Message(username, decode_text(buffer, key), true));
             msg = std::format("{}: {}", username, decode_text(buffer, key));
             for (unsigned int i = 0; i < CLIENTS.size(); i++)
             {
@@ -155,7 +197,7 @@ void chat(SOCKET cliente)
     }
 
     closesocket(cliente);
-    mssg = (char*)std::format("{} se desconectó", username).c_str();
+    mssg = (char*)std::format("{} se desconecto", username).c_str();
     {
         for (unsigned int i = 0; i < CLIENTS.size(); i++)
         {
@@ -184,7 +226,7 @@ int main()
         printf("WSAStartup failed: %d\n", WSAGetLastError());
         return 1;
     }
-    std::thread file_th(file_sv);
+    std::thread file_th(file_sv_listen);
     file_th.detach();
     listen_sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (listen_sock == INVALID_SOCKET) {
@@ -202,6 +244,18 @@ int main()
         return 1;
     }
     printf("El servidor de chat en localhost:5050\n");
+    if (std::filesystem::exists("./resources/db"))
+    {
+        std::ifstream rec("./resources/db");
+        std::string a, b;
+        while (rec >> a >> b)
+        {
+            MESSAGES.push_back(Message(_strdup(a.c_str()), _strdup(b.c_str()), true));
+        }
+        std::cout << "Cargada base de datos " << MESSAGES.size() << std::endl;
+    }
+    std::thread db_th(db);
+    db_th.detach();
     while (true)
     {
         listen(listen_sock, SOMAXCONN);
@@ -209,7 +263,6 @@ int main()
         client_sock = accept(listen_sock, (struct sockaddr*)&server, &client_size);
         std::thread cliente_th(chat, client_sock);
         cliente_th.detach();
-
     }
 
     WSACleanup();
