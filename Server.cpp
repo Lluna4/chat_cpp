@@ -121,6 +121,29 @@ void db()
     }
 }
 
+void file_sv(SOCKET client)
+{
+    int bytesReceived = 1;
+    char buffer[4096];
+    int receive = 0;
+    char* file_name = (char*)calloc(10, sizeof(char));
+    char *file_num_buff = (char *)calloc(2, sizeof(char));
+    recv(client, file_num_buff, 2, 0);
+    std::cout << atoi(file_num_buff) << std::endl;
+    recv(client, file_name, atoi(file_num_buff), 0);
+    std::ofstream output_file(file_name, std::ios::binary);
+    while (bytesReceived > 0)
+    {
+        bytesReceived = recv(client, buffer, 4096, 0);
+        if (bytesReceived > 0)
+            output_file.write(buffer, bytesReceived);
+    }
+    output_file.flush();
+    output_file.close();
+    closesocket(client);
+}
+
+
 void file_sv_listen()
 {
     SOCKET listen_sock, client_sock;
@@ -147,6 +170,8 @@ void file_sv_listen()
         listen(listen_sock, SOMAXCONN);
         client_size = sizeof(struct sockaddr_in);
         client_sock = accept(listen_sock, (struct sockaddr*)&server, &client_size);
+        std::thread file_sv_th(file_sv, client_sock);
+        file_sv_th.detach();
     }
 }
 
@@ -216,23 +241,16 @@ void chat(SOCKET cliente)
 }
 
 
-int main()
+void chat_listen()
 {
-    WSADATA wsa;
+    int recv_size, client_size;
     SOCKET listen_sock, client_sock;
     struct sockaddr_in server;
-    int recv_size, client_size;
-    if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) {
-        printf("WSAStartup failed: %d\n", WSAGetLastError());
-        return 1;
-    }
-    std::thread file_th(file_sv_listen);
-    file_th.detach();
     listen_sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (listen_sock == INVALID_SOCKET) {
         printf("socket failed: %d\n", WSAGetLastError());
         WSACleanup();
-        return 1;
+        return ;
     }
     server.sin_family = AF_INET;
     server.sin_addr.s_addr = inet_addr(SERVER_IP.c_str());
@@ -241,7 +259,7 @@ int main()
         printf("bind failed: %d\n", WSAGetLastError());
         closesocket(listen_sock);
         WSACleanup();
-        return 1;
+        return ;
     }
     printf("El servidor de chat en localhost:5050\n");
     if (std::filesystem::exists("./resources/db"))
@@ -266,6 +284,27 @@ int main()
     }
 
     WSACleanup();
+}
+
+int main()
+{
+    WSADATA wsa;
+    if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) {
+        printf("WSAStartup failed: %d\n", WSAGetLastError());
+        return 1;
+    }
+    std::thread file_th(file_sv_listen);
+    file_th.detach();
+    std::thread listen_th(chat_listen);
+    char msg[1024];
+    while (true)
+    {
+        std::cin.getline(msg, 1024);
+        if (strcmp(msg, "stop") == 0)
+        {
+            exit(0);
+        }
+    }
     return 0;
 }
 
