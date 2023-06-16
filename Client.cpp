@@ -15,6 +15,9 @@
 char* BUFFER = (char*)calloc(1024, sizeof(char));
 std::string USERNAME;
 bool showColorPickerPopup = false;
+bool REPLYING = false;
+char* uname_repl = (char*)calloc(50, sizeof(char));
+int img = 10;
 
 std::vector<ImVec4> COLORS = {
 	ImVec4(0.584f, 0.827f, 0.898f, 1.0f),   // Pastel Blue
@@ -50,6 +53,7 @@ std::vector<ImVec4> COLORS = {
 };
 
 SOCKET client_socket;
+
 const std::string SERVER_IP = "127.0.0.1";
 const int SERVER_PORT = 5050;
 char* KEY = (char*)calloc(1030, sizeof(char));
@@ -57,7 +61,7 @@ bool FIRST = true;
 bool FIRST_RECV = true;
 int FILE_NAME = 1;
 
-/*std::string open_dialog()
+std::string open_dialog()
 {
 	OPENFILENAMEW ofn;               // Structure for the file dialog
 	wchar_t szFile[260];             // Buffer to store the selected file path
@@ -90,14 +94,14 @@ int FILE_NAME = 1;
 		MessageBoxW(NULL, L"Seleccion cancelada!", L"Error", MB_OK | MB_ICONERROR);
 	}
 	return returnValue;
-}*/
+}
 
 ImVec4 getRandomElement(const std::vector<ImVec4>& vec) {
 	std::random_device rd; // Obtain a random number from hardware
 	std::mt19937 eng(rd()); // Seed the generator
 
 	// Define the range of indices
-	std::uniform_int_distribution<> distr(0, vec.size() - 1);
+	std::uniform_int_distribution<> distr(0, static_cast<int>(vec.size()) - 1);
 
 	// Generate a random index
 	int randomIndex = distr(eng);
@@ -153,8 +157,8 @@ class Message
 	public:
 		Message() {}
 
-		Message(char *msg, User usuario, bool same)
-			:msg_(msg), usuario_(usuario), same_(same)
+		Message(char *msg, User usuario, bool same, bool image)
+			:msg_(msg), usuario_(usuario), same_(same), image_(image)
 		{}
 
 		char* get_message()
@@ -213,11 +217,17 @@ class Message
 			clicked = a;
 		}
 
+		bool get_type()
+		{
+			return image_;
+		}
+
 	private:
 		char* msg_;
 		User usuario_;
 		bool same_;
-		char* time = get_time();
+		bool image_;
+		char* time = _strdup(get_time());
 		bool clicked = false;
 
 };
@@ -230,7 +240,7 @@ char* get_username(char* msg)
 	while (msg[index] != ':')
 		index++;
 	char* ret = (char*)calloc(index + 1, sizeof(char));
-	strncpy(ret, msg, index);
+	strncpy_s(ret, index + 1, msg, index);
 	return ret;
 }
 
@@ -259,10 +269,10 @@ void receive(SOCKET client)
 					{
 						if (strcmp(USERS[i].get_username(), get_username(msg)) == 0)
 						{
-							if (strcmp(MESSAGES.back().get_username(), get_username(msg)) == 0)
-								MESSAGES.push_back(Message(_strdup(msg), USERS[i], true));
+							if (!MESSAGES.empty() && strcmp(MESSAGES.back().get_username(), get_username(msg)) == 0)
+								MESSAGES.push_back(Message(_strdup(msg), USERS[i], true, false));
 							else
-								MESSAGES.push_back(Message(_strdup(msg), USERS[i], false));
+								MESSAGES.push_back(Message(_strdup(msg), USERS[i], false, false));
 							found = true;
 							break;
 						}
@@ -271,22 +281,22 @@ void receive(SOCKET client)
 					{
 						User usr = User(get_username(msg));
 						if (strcmp(MESSAGES.back().get_username(), get_username(msg)) == 0)
-							MESSAGES.push_back(Message(_strdup(msg), usr, true));
+							MESSAGES.push_back(Message(_strdup(msg), usr, true, false));
 						else
-							MESSAGES.push_back(Message(_strdup(msg), usr, false));
+							MESSAGES.push_back(Message(_strdup(msg), usr, false, false));
 						USERS.push_back(usr);
 					}
 				}
 				else
 				{
 					User usr = User(get_username(msg));
-					MESSAGES.push_back(Message(_strdup(msg), usr, false));
+					MESSAGES.push_back(Message(_strdup(msg), usr, false, false));
 					USERS.push_back(usr);
 				}
 
 				continue;
 			}
-			MESSAGES.push_back(Message(_strdup(msg), User(), false));
+			MESSAGES.push_back(Message(_strdup(msg), User(), false, false));
 		}
 		free(msg);
 	}
@@ -313,6 +323,7 @@ public:
 							MESSAGES[i].update_user();
 							ImGui::Text(" ");
 							ImGui::TextColored(MESSAGES[i].get_color(), MESSAGES[i].get_username());
+
 							if (ImGui::IsItemHovered())
 							{
 								ImVec4 Color = MESSAGES[i].get_color();
@@ -346,11 +357,11 @@ public:
 					}
 					if (strstr(MESSAGES[i].get_message(), std::format("@{}", USERNAME).c_str()) != NULL)
 					{
-						int diff = strlen(MESSAGES[i].get_message()) - strlen(strstr(MESSAGES[i].get_message(), std::format("@{}", USERNAME).c_str()));
+						unsigned int diff = (unsigned int)(strlen(MESSAGES[i].get_message()) - strlen(strstr(MESSAGES[i].get_message(), std::format("@{}", USERNAME).c_str())));
 
 						if (diff > USERNAME.size() + 2)
 						{
-							ImGui::TextWrapped(ft_substr(MESSAGES[i].get_message(), USERNAME.size() + 1, diff - USERNAME.size() - 3));
+							ImGui::TextWrapped(ft_substr(MESSAGES[i].get_message(), (unsigned int)(USERNAME.size() + 1), diff - USERNAME.size() - 3));
 						}
 						for (unsigned int i = 0; i < USERS.size(); i++)
 						{
@@ -363,20 +374,33 @@ public:
 							}
 						}
 						ImGui::SameLine();
-						ImGui::TextWrapped(ft_substr(MESSAGES[i].get_message(), diff + std::format("@{}", USERNAME).size(), strlen(MESSAGES[i].get_message())));
+						ImGui::TextWrapped(ft_substr(MESSAGES[i].get_message(), (unsigned int)(diff + std::format("@{}", USERNAME).size()), strlen(MESSAGES[i].get_message())));
 					}
 					else
 					{
 						if (MESSAGES[i].get_clicked() == false)
-							ImGui::TextWrapped(strstr(MESSAGES[i].get_message(), " "));
+						{
+							//std::vector<std::string> buttonArray = { "Button 1", "Button 2", "Button 3" };
+							//RenderButtonArray(buttonArray);
+							if (MESSAGES[i].get_type() == false)
+								ImGui::TextWrapped(strstr(MESSAGES[i].get_message(), " "));
+							else
+							{
+								std::shared_ptr<Walnut::Image> m_image;
+								m_image = std::make_shared<Walnut::Image>(MESSAGES[i].get_message());
+								float width = m_image->GetWidth();
+								float height = m_image->GetHeight();
+								float aspectRatio = width / height;
+								float newWidth = 300;
+								float newHeight = newWidth / aspectRatio;
+								ImGui::Image(m_image->GetDescriptorSet(), { newWidth, newHeight });
+
+							}
+						}
 						if (ImGui::IsItemClicked(0) || MESSAGES[i].get_clicked() == true)
 						{
-							MESSAGES[i].set_clicked(true);
-							int textInputFlags = ImGuiInputTextFlags_EnterReturnsTrue;
-							if (ImGui::InputText(" ", MESSAGES[i].get_message(), 1024, textInputFlags))
-							{
-								MESSAGES[i].set_clicked(false);
-							}
+							uname_repl = MESSAGES[i].get_username();
+							REPLYING = true;
 						}
 						/*if (ImGui::IsItemClicked(1)) TODO: Eliminar bien
 						{
@@ -416,14 +440,53 @@ public:
 					//m_image = std::make_shared<Walnut::Image>("test.png");
 					//ImGui::Image(m_image->GetDescriptorSet(), {(float)m_image->GetWidth(), (float)m_image->GetHeight()});
 				}
-
 			}
 		}
 		ImGui::End();
+
 	}
+
 	/*private:
 		std::shared_ptr<Walnut::Image> m_image;*/
 };
+
+void send_file()
+{
+	std::string file_path = open_dialog();
+	SOCKET file_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	std::ifstream input_file(file_path, std::ios::binary);
+	char buffer[4096];
+	std::uintmax_t size = std::filesystem::file_size(file_path);
+	int blocks = (int)(size / 4096);
+	std::cout << blocks << std::endl;
+	int actual = 0;
+	std::cout << file_path << std::endl;
+	struct sockaddr_in server;
+	server.sin_family = AF_INET;
+	server.sin_port = htons(5051);
+	server.sin_addr.S_un.S_addr = inet_addr("127.0.0.1");
+
+	if (connect(file_socket, (struct sockaddr*)&server, sizeof(server)) < 0) {
+		std::cerr << "Connect error : " << WSAGetLastError() << "\n";
+		WSACleanup();
+		return;
+	}
+	std::string name = std::format("test{}.png", img);
+	img++;
+	send(file_socket, "10", 2, 0);
+	send(file_socket, name.c_str(), 10, 0);
+	while (input_file.read(buffer, sizeof(buffer)).gcount() > 0) 
+	{
+		if (send(file_socket, buffer, input_file.gcount(), 0) < 0) {
+			std::cerr << "Send failed : " << WSAGetLastError() << "\n";
+			return;
+		}
+		float percent = (static_cast<float>(actual) / blocks) * 100;
+		std::cout << percent << "%" << std::endl;
+		actual++;
+	}
+	MESSAGES.push_back(Message(_strdup(file_path.c_str()), User(_strdup(USERNAME.c_str())), true, true));
+}
 
 class ChatLayer : public Walnut::Layer
 {
@@ -445,16 +508,21 @@ public:
 				USERNAME = _strdup(BUFFER);
 				memset(BUFFER, 0, sizeof(BUFFER));
 				FIRST = false;
-				send(client_socket, encode_text((char *)USERNAME.c_str(), KEY), USERNAME.size(), 0);
+				send(client_socket, encode_text((char *)USERNAME.c_str(), KEY), (int)USERNAME.size(), 0);
 				USERS.push_back(User(_strdup(USERNAME.c_str())));
 				ImGui::CloseCurrentPopup();
 			}
 			ImGui::EndPopup();
 		}
+		if (REPLYING == true)
+		{
+			ImGui::SetWindowFontScale(0.9f);
+			ImGui::TextColored(ImVec4(0.38f, 0.4f, 0.42f, 0.95f), std::format("Estas respondiendo a {}", uname_repl).c_str());
+			ImGui::SetWindowFontScale(1.0f);
+		}
 		int textInputFlags = ImGuiInputTextFlags_EnterReturnsTrue;
 		float windowWidth = ImGui::GetWindowSize().x;
 		float inputWidth = windowWidth * 0.7f;
-
 		float centerPosX = (windowWidth - inputWidth) * 0.5f;
 		ImGui::SetCursorPosX(centerPosX);
 		if (ImGui::InputText(" ", BUFFER, 1024, textInputFlags)) 
@@ -462,16 +530,22 @@ public:
 			// enter was pressed 
 			if (strcmp(BUFFER, "/fps") == 0)
 			{
-				MESSAGES.push_back(Message(_strdup(ft_itoa((int)ImGui::GetIO().Framerate)), User(), false));
+				MESSAGES.push_back(Message(_strdup(ft_itoa((int)ImGui::GetIO().Framerate)), User(), false, false));
 			}
 			else
 			{
-				send(client_socket, encode_text(_strdup(BUFFER), KEY), strlen(BUFFER), 0);
+				send(client_socket, encode_text(_strdup(BUFFER), KEY), (int)strlen(BUFFER), 0);
 			}
 			// now clear it
 			memset(BUFFER, 0, sizeof(BUFFER));
-
+			REPLYING = false;
 			ImGui::SetKeyboardFocusHere(-1);
+		}
+		ImGui::SameLine();
+		if (ImGui::Button("test"))
+		{
+			std::thread send_fl(send_file);
+			send_fl.detach();
 		}
 		ImGui::End();
 	}
@@ -489,7 +563,6 @@ Walnut::Application* Walnut::CreateApplication(int argc, char** argv)
     server_address.sin_family = AF_INET;
     server_address.sin_addr.s_addr = inet_addr(SERVER_IP.c_str());
     server_address.sin_port = htons(SERVER_PORT);
-
     if (connect(client_socket, (struct sockaddr*)&server_address, sizeof(server_address)) == SOCKET_ERROR)
     {
 		std::cerr << "Connect failed: " << WSAGetLastError();
@@ -503,7 +576,7 @@ Walnut::Application* Walnut::CreateApplication(int argc, char** argv)
 	{
 		std::ifstream save("sav");
 		std::getline(save, USERNAME);
-		send(client_socket, encode_text((char*)USERNAME.c_str(), KEY), USERNAME.size(), 0);
+		send(client_socket, encode_text((char*)USERNAME.c_str(), KEY), (int)USERNAME.size(), 0);
 		FIRST = false;
 	}
 	Walnut::ApplicationSpecification spec;
@@ -512,6 +585,50 @@ Walnut::Application* Walnut::CreateApplication(int argc, char** argv)
 	Walnut::Application* app = new Walnut::Application(spec);
 	app->PushLayer<ExampleLayer>();
 	app->PushLayer<ChatLayer>();
+	ImGuiStyle& style = ImGui::GetStyle();
+	style.WindowRounding = 5.3f;
+	style.FrameRounding = 2.3f;
+	style.ScrollbarRounding = 0;
+
+	style.Colors[ImGuiCol_Text] = ImVec4(0.90f, 0.90f, 0.90f, 0.90f);
+	style.Colors[ImGuiCol_TextDisabled] = ImVec4(0.60f, 0.60f, 0.60f, 1.00f);
+	style.Colors[ImGuiCol_WindowBg] = ImVec4(0.09f, 0.09f, 0.15f, 1.00f);
+	style.Colors[ImGuiCol_ChildBg] = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
+	style.Colors[ImGuiCol_PopupBg] = ImVec4(0.05f, 0.05f, 0.10f, 0.85f);
+	style.Colors[ImGuiCol_Border] = ImVec4(0.70f, 0.70f, 0.70f, 0.65f);
+	style.Colors[ImGuiCol_BorderShadow] = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
+	style.Colors[ImGuiCol_FrameBg] = ImVec4(0.00f, 0.00f, 0.01f, 1.00f);
+	style.Colors[ImGuiCol_FrameBgHovered] = ImVec4(0.90f, 0.80f, 0.80f, 0.40f);
+	style.Colors[ImGuiCol_FrameBgActive] = ImVec4(0.90f, 0.65f, 0.65f, 0.45f);
+	style.Colors[ImGuiCol_TitleBg] = ImVec4(0.00f, 0.00f, 0.00f, 0.83f);
+	style.Colors[ImGuiCol_TitleBgCollapsed] = ImVec4(0.40f, 0.40f, 0.80f, 0.20f);
+	style.Colors[ImGuiCol_TitleBgActive] = ImVec4(0.00f, 0.00f, 0.00f, 0.87f);
+	style.Colors[ImGuiCol_MenuBarBg] = ImVec4(0.01f, 0.01f, 0.02f, 0.80f);
+	style.Colors[ImGuiCol_ScrollbarBg] = ImVec4(0.20f, 0.25f, 0.30f, 0.60f);
+	style.Colors[ImGuiCol_ScrollbarGrab] = ImVec4(0.55f, 0.53f, 0.55f, 0.51f);
+	style.Colors[ImGuiCol_ScrollbarGrabHovered] = ImVec4(0.56f, 0.56f, 0.56f, 1.00f);
+	style.Colors[ImGuiCol_ScrollbarGrabActive] = ImVec4(0.56f, 0.56f, 0.56f, 0.91f);
+	style.Colors[ImGuiCol_CheckMark] = ImVec4(0.90f, 0.90f, 0.90f, 0.83f);
+	style.Colors[ImGuiCol_SliderGrab] = ImVec4(0.70f, 0.70f, 0.70f, 0.62f);
+	style.Colors[ImGuiCol_SliderGrabActive] = ImVec4(0.30f, 0.30f, 0.30f, 0.84f);
+	style.Colors[ImGuiCol_Button] = ImVec4(0.48f, 0.72f, 0.89f, 0.49f);
+	style.Colors[ImGuiCol_ButtonHovered] = ImVec4(0.50f, 0.69f, 0.99f, 0.68f);
+	style.Colors[ImGuiCol_ButtonActive] = ImVec4(0.80f, 0.50f, 0.50f, 1.00f);
+	style.Colors[ImGuiCol_Header] = ImVec4(0.30f, 0.69f, 1.00f, 0.53f);
+	style.Colors[ImGuiCol_HeaderHovered] = ImVec4(0.44f, 0.61f, 0.86f, 1.00f);
+	style.Colors[ImGuiCol_HeaderActive] = ImVec4(0.38f, 0.62f, 0.83f, 1.00f);
+	style.Colors[ImGuiCol_Separator] = ImVec4(0.50f, 0.50f, 0.50f, 1.00f);
+	style.Colors[ImGuiCol_SeparatorHovered] = ImVec4(0.70f, 0.60f, 0.60f, 1.00f);
+	style.Colors[ImGuiCol_SeparatorActive] = ImVec4(0.90f, 0.70f, 0.70f, 1.00f);
+	style.Colors[ImGuiCol_ResizeGrip] = ImVec4(1.00f, 1.00f, 1.00f, 0.85f);
+	style.Colors[ImGuiCol_ResizeGripHovered] = ImVec4(1.00f, 1.00f, 1.00f, 0.60f);
+	style.Colors[ImGuiCol_ResizeGripActive] = ImVec4(1.00f, 1.00f, 1.00f, 0.90f);
+	style.Colors[ImGuiCol_PlotLines] = ImVec4(1.00f, 1.00f, 1.00f, 1.00f);
+	style.Colors[ImGuiCol_PlotLinesHovered] = ImVec4(0.90f, 0.70f, 0.00f, 1.00f);
+	style.Colors[ImGuiCol_PlotHistogram] = ImVec4(0.90f, 0.70f, 0.00f, 1.00f);
+	style.Colors[ImGuiCol_PlotHistogramHovered] = ImVec4(1.00f, 0.60f, 0.00f, 1.00f);
+	style.Colors[ImGuiCol_TextSelectedBg] = ImVec4(0.00f, 0.00f, 1.00f, 0.35f);
+	style.Colors[ImGuiCol_ModalWindowDimBg] = ImVec4(0.20f, 0.20f, 0.20f, 0.35f);
 	app->SetMenubarCallback([app]()
 		{
 			if (ImGui::BeginMenu("Guardar"))
@@ -521,14 +638,14 @@ Walnut::Application* Walnut::CreateApplication(int argc, char** argv)
 					std::ofstream save("sav");
 					save << USERNAME;
 					save.close();
-					MESSAGES.push_back(Message(_strdup("Se ha guardado el nombre de usuario"), User(), false));
+					MESSAGES.push_back(Message(_strdup("Se ha guardado el nombre de usuario"), User(), false, false));
 				}
 				if (ImGui::MenuItem("Eliminar usuario"))
 				{
 					if (std::filesystem::exists("sav") == true)
 					{
 						remove("sav");
-						MESSAGES.push_back(Message(_strdup("Se ha borrado el nombre de usuario guardado"), User(), false));
+						MESSAGES.push_back(Message(_strdup("Se ha borrado el nombre de usuario guardado"), User(), false, false));
 					}
 				}
 				ImGui::EndMenu();
@@ -558,10 +675,6 @@ Walnut::Application* Walnut::CreateApplication(int argc, char** argv)
 						if (strcmp(USERS[i].get_username(), USERNAME.c_str()) == 0)
 						{
 							USERS[i].set_color(color);
-							ImGuiStyle& style = ImGui::GetStyle();
-							style.Colors[ImGuiCol_Button] = color;
-							style.Colors[ImGuiCol_CheckMark] = color;
-							style.Colors[ImGuiCol_Header] = color;
 						}
 					}
 					ImGui::CloseCurrentPopup();
